@@ -6,7 +6,6 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { generateProductId } from "@/lib/utils"; // Import our new generator
-import { supabase } from "@/lib/supabaseClient"; // We'll need a way to check for duplicates
 
 // Define the type for the data we expect from the form
 export type FormState = {

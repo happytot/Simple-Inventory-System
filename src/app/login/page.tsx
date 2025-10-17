@@ -4,17 +4,25 @@ import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { Auth } from '@supabase/auth-ui-react';
 import { ThemeSupa } from '@supabase/auth-ui-shared';
 import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react'; // 1. Import useState
 
 export default function LoginPage() {
   const supabase = createClientComponentClient();
   const router = useRouter();
 
+  // 2. Add state to hold the redirect URL
+  const [redirectTo, setRedirectTo] = useState('');
+
   useEffect(() => {
+    // 3. As soon as the component mounts in the browser,
+    //    set the redirect URL using the window.location.origin
+    setRedirectTo(`${window.location.origin}/auth/callback`);
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       // If the user is signed in, redirect them to the home page
       if (session) {
         router.push('/');
+        router.refresh(); // Ensure the page data is re-fetched
       }
     });
 
@@ -23,7 +31,12 @@ export default function LoginPage() {
       subscription.unsubscribe();
     };
   }, [supabase, router]);
-
+  
+  // 4. If the URL isn't set yet, don't render the Auth component
+  //    to prevent it from getting an empty value.
+  if (!redirectTo) {
+    return null; // Or show a loading spinner
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -33,8 +46,9 @@ export default function LoginPage() {
           supabaseClient={supabase}
           appearance={{ theme: ThemeSupa }}
           theme="dark"
-          providers={['github']} // Optional: add social providers
-          redirectTo={`${location.origin}/auth/callback`}
+          providers={['github', 'google']} 
+          // 5. Use the state variable for the redirect URL
+          redirectTo={redirectTo} 
         />
       </div>
     </div>
