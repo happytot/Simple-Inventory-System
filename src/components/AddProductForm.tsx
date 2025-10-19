@@ -3,16 +3,15 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { addProduct, FormState, CategoryData } from '@/app/actions'; // 1. Import new type
+import { addProduct, FormState, CategoryData } from '@/app/actions';
 import Spinner from '@/components/common/Spinner';
 
-// 2. Define Category type
+// Type Definitions
 type Category = {
   id: number;
   name: string;
 };
 
-// 3. Add categories to props
 type AddProductFormProps = {
   categories: Category[];
 };
@@ -30,23 +29,18 @@ const initialState: FormState = {
   quantity: 0,
 };
 
-// 4. Add initial state for category
 const initialCategoryState: CategoryData = { categoryId: '', newCategoryName: '' };
 
-export default function AddProductForm({ categories }: AddProductFormProps) { // 5. Use prop
+export default function AddProductForm({ categories }: AddProductFormProps) {
   const [isPending, startTransition] = useTransition();
-  const router = useRouter(); 
+  const router = useRouter();
   const [formData, setFormData] = useState<FormState>(initialState);
-  
-  // 6. Add state for category data
   const [categoryData, setCategoryData] = useState<CategoryData>(initialCategoryState);
   const showNewCategoryInput = categoryData.categoryId === 'new';
-  
   const [errors, setErrors] = useState<FormErrors>({});
   const [successMessage, setSuccessMessage] = useState<string>('');
 
   const validateField = (name: string, value: string | number): string | undefined => {
-    // ... (validation logic is the same)
     switch (name) {
       case 'name':
         if (typeof value !== 'string' || !value) return 'Name is required.';
@@ -78,8 +72,7 @@ export default function AddProductForm({ categories }: AddProductFormProps) { //
     setErrors((prev) => ({ ...prev, [name]: error, server: undefined }));
     setSuccessMessage('');
   };
-  
-  // 7. Add handlers for category inputs
+
   const handleCategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     setCategoryData({ ...categoryData, categoryId: e.target.value });
   };
@@ -87,31 +80,24 @@ export default function AddProductForm({ categories }: AddProductFormProps) { //
     setCategoryData({ ...categoryData, newCategoryName: e.target.value });
   };
 
-// 8. Update handleSubmit
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
-    // Final validation check
     const newErrors: FormErrors = {};
     Object.keys(formData).forEach((key) => {
-      // --- THIS IS THE MISSING CODE ---
       const field = key as keyof FormState;
       const error = validateField(field, formData[field]);
       if (error) {
         newErrors[field] = error;
       }
-      // --- END OF MISSING CODE ---
     });
-
-  
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
       setSuccessMessage('');
       return;
     }
-    
-    // 9. Add category validation
+
     if (!categoryData.categoryId) {
       setErrors({ server: 'Please select a category.' });
       return;
@@ -125,19 +111,18 @@ export default function AddProductForm({ categories }: AddProductFormProps) { //
     setSuccessMessage('');
 
     startTransition(async () => {
-      // 10. Pass both form data and category data to the action
       const result = await addProduct(
         {
           ...formData,
           quantity: Number(formData.quantity),
         },
-        categoryData // <-- Pass new data
+        categoryData
       );
 
       if (result.success) {
         setSuccessMessage(result.message);
         resetForm();
-        router.refresh(); // Refresh to show the new product
+        router.refresh();
       } else {
         setErrors({ server: result.message });
       }
@@ -146,7 +131,7 @@ export default function AddProductForm({ categories }: AddProductFormProps) { //
 
   const resetForm = () => {
     setFormData(initialState);
-    setCategoryData(initialCategoryState); // 11. Reset category
+    setCategoryData(initialCategoryState);
     setErrors({});
   };
 
@@ -156,24 +141,26 @@ export default function AddProductForm({ categories }: AddProductFormProps) { //
   };
 
   return (
-    // 12. Update container style
-    <div className="bg-white p-6 rounded-2xl shadow-lg mb-8">
-      <h2 className="text-xl font-semibold mb-4">Add New Product</h2>
+    // **1. Updated Container Style:** Changed background, added border
+    <div className="bg-white border border-gray-200 p-6 rounded-2xl shadow-sm mb-8">
+      <h2 className="text-xl font-semibold mb-4 text-gray-800">Add New Product</h2>
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        {/* **2. Updated Message Styles:** Softer background colors */}
         {successMessage && (
-          <div className="p-3 bg-green-100 text-green-800 border border-green-300 rounded-lg">
+          <div className="p-3 bg-green-50 text-green-700 border border-green-200 rounded-lg">
             {successMessage}
           </div>
         )}
 
         {errors.server && (
-          <div className="p-3 bg-red-100 text-red-800 border border-red-300 rounded-lg">
+          <div className="p-3 bg-red-50 text-red-700 border border-red-200 rounded-lg">
             {errors.server}
           </div>
         )}
 
         <div className="flex flex-col sm:flex-row gap-4">
+          {/* Name Field */}
           <div className="flex-grow">
             <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">Product Name</label>
             <input
@@ -181,11 +168,13 @@ export default function AddProductForm({ categories }: AddProductFormProps) { //
               value={formData.name}
               onChange={handleChange}
               maxLength={100} required
-              className={errors.name ? 'border-red-500' : ''} // Use global style
+              // Use global input style + error border
+              className={errors.name ? 'border-red-500 ring-1 ring-red-500' : ''}
             />
             {errors.name && <p className="text-red-600 text-sm mt-1">{errors.name}</p>}
           </div>
 
+          {/* Quantity Field */}
           <div className="w-full sm:w-32">
             <label htmlFor="quantity" className="block text-sm font-medium text-gray-700 mb-1">Quantity</label>
             <input
@@ -193,13 +182,14 @@ export default function AddProductForm({ categories }: AddProductFormProps) { //
               value={formData.quantity}
               onChange={handleChange}
               min="1" step="1" required
-              className={errors.quantity ? 'border-red-500' : ''} // Use global style
+              // Use global input style + error border
+              className={errors.quantity ? 'border-red-500 ring-1 ring-red-500' : ''}
             />
             {errors.quantity && <p className="text-red-600 text-sm mt-1">{errors.quantity}</p>}
           </div>
         </div>
 
-        {/* 13. Add Category Inputs */}
+        {/* Category Inputs */}
         <div className="flex flex-col sm:flex-row gap-4">
           <div className="flex-grow">
             <label htmlFor="category" className="block text-sm font-medium text-gray-700 mb-1">Category</label>
@@ -209,6 +199,7 @@ export default function AddProductForm({ categories }: AddProductFormProps) { //
               value={categoryData.categoryId}
               onChange={handleCategoryChange}
               required
+              // Uses global select style
             >
               <option value="" disabled>-- Select a category --</option>
               {categories.map((cat) => (
@@ -231,11 +222,13 @@ export default function AddProductForm({ categories }: AddProductFormProps) { //
                 onChange={handleNewCategoryChange}
                 placeholder="e.g., Hardware"
                 required
+                // Uses global input style
               />
             </div>
           )}
         </div>
 
+        {/* Description Field */}
         <div>
           <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">Description (Optional)</label>
           <textarea
@@ -243,25 +236,27 @@ export default function AddProductForm({ categories }: AddProductFormProps) { //
             value={formData.description}
             onChange={handleChange}
             maxLength={500} rows={3}
-            className={errors.description ? 'border-red-500' : ''} // Use global style
+             // Use global textarea style + error border
+            className={errors.description ? 'border-red-500 ring-1 ring-red-500' : ''}
           />
           {errors.description && <p className="text-red-500 text-sm mt-1">{errors.description}</p>}
         </div>
 
-        <div className="flex gap-4">
+        {/* Buttons */}
+        <div className="flex gap-4 pt-2"> {/* Added padding-top */}
           <button
             type="submit"
             disabled={isPending}
-            className="btn-primary flex items-center justify-center gap-2" // <-- Add flex
+            className="btn-primary flex items-center justify-center gap-2"
           >
-            {isPending && <Spinner />} {/* <-- ADD THIS */}
+            {isPending && <Spinner />}
             {isPending ? 'Adding...' : 'Add Product'}
           </button>
           <button
             type="button"
             onClick={handleCancel}
             disabled={isPending}
-            className="btn-secondary" // 15. Use global style
+            className="btn-secondary"
           >
             Cancel
           </button>

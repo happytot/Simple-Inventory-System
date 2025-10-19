@@ -7,260 +7,356 @@ import ItemGridView from './ItemGridView';
 import { deleteProduct } from '@/app/actions';
 import EditItemModal from './EditItemModal';
 import LowStockAlert from './LowStockAlert';
+import useDebounce from '@/hooks/useDebounce';
+import NoResults from '@/components/common/NoResults';
+import FilterDropdown from './FilterDropdown';
 
-// 1. Define Category type
+// --- TYPE DEFINITIONS ---
 type Category = {
-  id: number;
-  name: string;
+ id: number;
+ name: string;
 };
 
-// Product type is already correct
 type Product = {
-  id: number;
-  name: string;
-  quantity: number;
-  description: string | null;
-  product_id: string | null;
-  created_at: string;
-  low_stock_threshold: number;
-  category_id: number | null;
-  Categories: { name: string } | null;
+ id: number;
+ name: string;
+ quantity: number;
+ description: string | null;
+ product_id: string | null;
+ created_at: string;
+ low_stock_threshold: number;
+ category_id: number | null;
+ Categories: { name: string } | null;
 };
 
-// 2. Add categories to props
 type InventoryManagerProps = {
-  initialProducts: Product[];
-  categories: Category[]; // <-- ADDED
+ initialProducts: Product[];
+ categories: Category[];
 };
 
-export default function InventoryManager({ initialProducts, categories }: InventoryManagerProps) { // 3. Use prop
-  const [products, setProducts] = useState<Product[]>(initialProducts);
-  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+// --- INITIAL STATE FOR FILTERS ---
+const initialFilterState = {
+ stockStatus: 'all',
+ category: 'all',
+ date: 'all',
+ quantity: { min: '', max: '' },
+};
 
-  const [view, setView] = useState<'list' | 'grid'>('list');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [sortConfig, setSortConfig] = useState<{ key: keyof Product; direction: 'asc' | 'desc' }>({ key: 'created_at', direction: 'desc' });
-  const [pagination, setPagination] = useState({ currentPage: 1, itemsPerPage: 10 });
-  const [showOnlyLowStock, setShowOnlyLowStock] = useState(false);
+export default function InventoryManager({ initialProducts, categories }: InventoryManagerProps) {
 
-  // --- ADD THIS HOOK ---
-  // This syncs the client state when the server-fetched props change
-  useEffect(() => {
-    setProducts(initialProducts);
-  }, [initialProducts]);
-  // --- END OF HOOK ---
+ // --- STATE MANAGEMENT ---
+ const [products, setProducts] = useState<Product[]>(initialProducts);
+ const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+ const [view, setView] = useState<'list' | 'grid'>('list');
+ const [pagination, setPagination] = useState({ currentPage: 1, itemsPerPage: 10 });
 
-  // 4. Add state for category filter
-  const [categoryFilter, setCategoryFilter] = useState<string>('all');
+ const [searchTerm, setSearchTerm] = useState('');
+ const [stockStatusFilter, setStockStatusFilter] = useState(initialFilterState.stockStatus);
+ const [categoryFilter, setCategoryFilter] = useState(initialFilterState.category);
+ const [dateFilter, setDateFilter] = useState(initialFilterState.date);
+ const [quantityFilter, setQuantityFilter] = useState(initialFilterState.quantity);
 
-  const lowStockItems = useMemo(() =>
-    products.filter(p => p.quantity < p.low_stock_threshold),
-  [products]);
+ // **1. Re-add sortConfig state**
+ const [sortConfig, setSortConfig] = useState<{ key: keyof Product; direction: 'asc' | 'desc' }>({ key: 'created_at', direction: 'desc' });
 
-  // 5. Update processedItems logic
-  const processedItems = useMemo(() => {
-    let filteredItems = products;
+ useEffect(() => {
+   setProducts(initialProducts);
+ }, [initialProducts]);
 
-    if (showOnlyLowStock) {
-      filteredItems = filteredItems.filter(
-        (product) => product.quantity < product.low_stock_threshold
-      );
+ const debouncedSearchTerm = useDebounce(searchTerm, 300);
+
+ // --- MEMOIZED CALCULATIONS ---
+ const lowStockItems = useMemo(() =>
+   products.filter(p => p.quantity < p.low_stock_threshold),
+ [products]);
+
+ const processedItems = useMemo(() => {
+   let filteredItems = products;
+
+   // ... (A-E Filtering Logic remains the same) ...
+   // A. Apply Stock Status Filter
+    if (stockStatusFilter === 'inStock') {
+      filteredItems = filteredItems.filter(p => p.quantity >= p.low_stock_threshold);
+    } else if (stockStatusFilter === 'lowStock') {
+      filteredItems = filteredItems.filter(p => p.quantity < p.low_stock_threshold && p.quantity > 0);
+    } else if (stockStatusFilter === 'outOfStock') {
+      filteredItems = filteredItems.filter(p => p.quantity === 0);
     }
-    
-    // 6. Apply Category Filter
+
+    // B. Apply Category Filter
     if (categoryFilter !== 'all') {
-      filteredItems = filteredItems.filter(
-        (product) => product.category_id === Number(categoryFilter)
+      filteredItems = filteredItems.filter(p => p.category_id === Number(categoryFilter));
+    }
+
+    // C. Apply Date Filter
+    if (dateFilter !== 'all') {
+      const now = new Date();
+      const filterDate = new Date(now);
+      const daysAgo = dateFilter === '7days' ? 7 : 30;
+      filterDate.setDate(now.getDate() - daysAgo);
+      filteredItems = filteredItems.filter(p => new Date(p.created_at) >= filterDate);
+    }
+
+    // D. Apply Quantity Range Filter
+    const minQty = parseFloat(quantityFilter.min);
+    const maxQty = parseFloat(quantityFilter.max);
+    if (!isNaN(minQty)) {
+      filteredItems = filteredItems.filter(p => p.quantity >= minQty);
+    }
+    if (!isNaN(maxQty)) {
+      filteredItems = filteredItems.filter(p => p.quantity <= maxQty);
+    }
+
+    // E. Apply Debounced Search Filter (Name, Description, ID)
+    if (debouncedSearchTerm) {
+      const lowerSearch = debouncedSearchTerm.toLowerCase();
+      filteredItems = filteredItems.filter(p =>
+        p.name.toLowerCase().includes(lowerSearch) ||
+        (p.description && p.description.toLowerCase().includes(lowerSearch)) ||
+        (p.product_id && p.product_id.toLowerCase().includes(lowerSearch))
       );
     }
 
-    if (searchTerm) {
-      filteredItems = filteredItems.filter(
-        (product) =>
-          product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          product.product_id?.toLowerCase().includes(searchTerm.toLowerCase())
-      );
+   // **3. Re-add Sorting Logic**
+   if (sortConfig.key) {
+      // Create a mutable copy before sorting
+      filteredItems = [...filteredItems].sort((a, b) => {
+        const valA = a[sortConfig.key];
+        const valB = b[sortConfig.key];
+        // Handle nulls if necessary
+        if (valA === null) return sortConfig.direction === 'asc' ? 1 : -1;
+        if (valB === null) return sortConfig.direction === 'asc' ? -1 : 1;
+
+        if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
+        return 0;
+      });
     }
 
-    filteredItems.sort((a, b) => {
-      // ... (sort logic is the same)
-      const valA = a[sortConfig.key];
-      const valB = b[sortConfig.key];
-      if (valA === null) return 1;
-      if (valB === null) return -1;
-      if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
-      if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
-      return 0;
-    });
-    return filteredItems;
-  }, [products, searchTerm, sortConfig, showOnlyLowStock, categoryFilter]); // 7. Add dependency
+   return filteredItems;
+ }, [
+   products,
+   debouncedSearchTerm,
+   stockStatusFilter,
+   categoryFilter,
+   dateFilter,
+   quantityFilter,
+   sortConfig // **3. Add sortConfig to dependency array**
+ ]);
 
-  const paginatedItems = processedItems.slice(
-    (pagination.currentPage - 1) * pagination.itemsPerPage,
-    pagination.currentPage * pagination.itemsPerPage
-  );
-  const totalPages = Math.ceil(processedItems.length / pagination.itemsPerPage);
+ // Early return for empty initial products (TC17 fix)
+ if (initialProducts.length === 0) {
+   return (
+     <div className="text-center bg-white p-12 rounded-2xl shadow-lg dark:bg-gray-800">
+       <h3 className="mt-2 text-xl font-semibold text-gray-900 dark:text-gray-100">No Products Yet</h3>
+       <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+         Add your first product using the form on the Dashboard page.
+       </p>
+     </div>
+   );
+ }
 
-  const handleSort = (key: keyof Product) => {
+ const paginatedItems = processedItems.slice(
+   (pagination.currentPage - 1) * pagination.itemsPerPage,
+   pagination.currentPage * pagination.itemsPerPage
+ );
+ const totalPages = Math.ceil(processedItems.length / pagination.itemsPerPage);
+
+ // --- EVENT HANDLERS ---
+ const handleOpenEditModal = (product: Product) => setEditingProduct(product);
+ const handleCloseEditModal = () => setEditingProduct(null);
+ const handleSaveEdit = (updatedProduct: Product) => {
+   setProducts(products.map(p => p.id === updatedProduct.id ? updatedProduct : p));
+ };
+
+ const handleClearFilters = () => {
+   setSearchTerm('');
+   setStockStatusFilter(initialFilterState.stockStatus);
+   setCategoryFilter(initialFilterState.category);
+   setDateFilter(initialFilterState.date);
+   setQuantityFilter(initialFilterState.quantity);
+   setSortConfig({ key: 'created_at', direction: 'desc' }); // Also reset sort
+   setPagination({ ...pagination, currentPage: 1 });
+ };
+
+ const resetToPageOne = () => setPagination({ ...pagination, currentPage: 1 });
+
+ // **2. Re-add handleSort function**
+ const handleSort = (key: keyof Product) => {
     setSortConfig((prevConfig) => {
+      // If same key, toggle direction, otherwise set new key and default to 'asc'
       const direction = prevConfig.key === key && prevConfig.direction === 'asc' ? 'desc' : 'asc';
       return { key, direction };
     });
+    resetToPageOne(); // Resetting page on sort makes sense
   };
 
-  const handleOpenEditModal = (product: Product) => {
-    setEditingProduct(product);
-  };
-  const handleCloseEditModal = () => {
-    setEditingProduct(null);
-  };
-  const handleSaveEdit = (updatedProduct: Product) => {
-    setProducts(products.map(p => p.id === updatedProduct.id ? updatedProduct : p));
-  };
 
-  if (initialProducts.length === 0) {
-    // ... (empty state is the same)
-  }
+ // --- RENDER ---
+ return (
+   <div>
+     <LowStockAlert items={lowStockItems} onEdit={handleOpenEditModal} />
 
-// 8. Update the JSX
-  return (
-    <div>
-      <LowStockAlert items={lowStockItems} onEdit={handleOpenEditModal} />
+     {/* Search Bar */}
+     <div className="mb-6">
+       <label htmlFor="search" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Search Products</label>
+       <input
+         type="text"
+         id="search"
+         placeholder="Search by Name, ID, or Description..."
+         value={searchTerm}
+         onChange={(e) => {
+           setSearchTerm(e.target.value);
+           resetToPageOne();
+         }}
+       />
+     </div>
 
-      {/* CONTROLS */}
-      <div className="flex flex-col md:flex-row gap-4 justify-between items-center mb-6">
-        {/* Search Bar */}
-        <div className="w-full md:max-w-xs">
-          <input
-            type="text"
-            placeholder="Search by Name or ID..."
-            value={searchTerm}
-            onChange={(e) => {
-              setSearchTerm(e.target.value);
-              setPagination({ ...pagination, currentPage: 1 });
-            }}
-          />
-        </div>
-        
-        {/* 9. Add Category Filter Dropdown */}
-        <div className="w-full md:max-w-xs">
-          <select
-            className="w-full" // Styled by globals.css
-            value={categoryFilter}
-            onChange={(e) => {
-              setCategoryFilter(e.target.value);
-              setPagination({ ...pagination, currentPage: 1 }); // Reset page
-            }}
-          >
-            <option value="all">Filter by Category (All)</option>
-            {categories.map((cat) => (
-              <option key={cat.id} value={cat.id}>
-                {cat.name}
-              </option>
-            ))}
-          </select>
-        </div>
+     {/* Filter Controls Row */}
+     <div className="mb-6 p-4 rounded-2xl shadow-lg">
+       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+         {/* Stock Status */}
+         <div>
+           <label htmlFor="stockStatus" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Stock Status</label>
+           <select
+             id="stockStatus"
+             value={stockStatusFilter}
+             onChange={(e) => {
+               setStockStatusFilter(e.target.value);
+               resetToPageOne();
+             }}
+           >
+             <option value="all">All Statuses</option>
+             <option value="inStock">In Stock</option>
+             <option value="lowStock">Low Stock</option>
+             <option value="outOfStock">Out of Stock</option>
+           </select>
+         </div>
+         {/* Category */}
+         <div>
+           <label htmlFor="category" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Category</label>
+           <select
+             id="category"
+             value={categoryFilter}
+             onChange={(e) => {
+               setCategoryFilter(e.target.value);
+               resetToPageOne();
+             }}
+           >
+             <option value="all">All Categories</option>
+             {categories.map((cat) => (
+               <option key={cat.id} value={cat.id}>
+                 {cat.name}
+               </option>
+             ))}
+           </select>
+         </div>
+         {/* Filter Dropdown */}
+         <FilterDropdown
+           dateFilter={dateFilter}
+           quantityFilter={quantityFilter}
+           setDateFilter={setDateFilter}
+           setQuantityFilter={setQuantityFilter}
+           onClearFilters={handleClearFilters}
+           resetToPageOne={resetToPageOne}
+         />
+       </div>
+     </div>
 
-        {/* Sort and View Controls */}
-        <div className="flex w-full md:w-auto items-center gap-4">
-          <select
-            className="flex-grow md:flex-grow-0"
-            onChange={(e) => handleSort(e.target.value as keyof Product)}
-            value={sortConfig.key}
-          >
-            <option value="name">Sort by Name</option>
-            <option value="quantity">Sort by Quantity</option>
-            <option value="created_at">Sort by Date Added</option>
-          </select>
-
-          {/* Segmented Control Style */}
-          <div className="hidden md:flex bg-gray-200 p-1 rounded-lg">
-            <button
-              onClick={() => setView('list')}
-              className={`px-3 py-1 rounded-md text-sm font-semibold ${view === 'list' ? 'bg-white text-apple-blue shadow' : 'bg-transparent text-gray-700'}`}
+     {/* Result Count, Sort & View Toggle Row */}
+     <div className="flex flex-col md:flex-row md:items-center mb-4 gap-4">
+        {/* Left Side */}
+        <div className="flex items-center gap-4 w-full md:w-auto">
+          <span className="text-sm font-medium text-gray-700 dark:text-gray-300 flex-shrink-0 whitespace-nowrap">
+            Showing {processedItems.length} of {products.length} items
+          </span>
+          {/* Sort Dropdown */}
+          <div className="relative min-w-[150px] flex-shrink">
+            <label htmlFor="sortOrder" className="sr-only">Sort by</label>
+            <select
+              id="sortOrder"
+              className="text-sm w-full appearance-none pl-3 pr-8 py-2 border border-gray-200 rounded-lg bg-gray-100 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-apple-blue"
+              value={sortConfig.key} // Use state value
+              onChange={(e) => handleSort(e.target.value as keyof Product)} // Use handler
             >
-              List
-            </button>
-            <button
-              onClick={() => setView('grid')}
-              className={`px-3 py-1 rounded-md text-sm font-semibold ${view === 'grid' ? 'bg-white text-apple-blue shadow' : 'bg-transparent text-gray-700'}`}
-            >
-              Grid
-            </button>
+              <option value="created_at">Sort: Date Added</option>
+              <option value="name">Sort: Name</option>
+              <option value="quantity">Sort: Quantity</option>
+            </select>
+            {/* Arrow */}
+            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700 dark:text-gray-300">
+                <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+            </div>
           </div>
         </div>
-      </div>
-
-      {/* --- THIS IS THE MISSING CHECKBOX CODE --- */}
-      <div className="flex justify-end mb-4">
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
-            className="rounded text-apple-blue focus:ring-apple-blue"
-            checked={showOnlyLowStock}
-            onChange={(e) => {
-              setShowOnlyLowStock(e.target.checked); // <-- This uses setShowOnlyLowStock
-              setPagination({ ...pagination, currentPage: 1 }); 
-            }}
-          />
-          <span className="text-sm font-medium text-gray-700">
-            Show Only Low Stock Items
-          </span>
-        </label>
-      </div>
-
-      {/* DYNAMIC VIEW (logic is the same) */}
-      <div className="md:hidden">
-        <ItemGridView items={paginatedItems} deleteAction={deleteProduct} onEdit={handleOpenEditModal} />
-      </div>
-      <div className="hidden md:block">
-        {view === 'list' ? (
-          <ItemListView items={paginatedItems} deleteAction={deleteProduct} onEdit={handleOpenEditModal} />
-        ) : (
-          <ItemGridView items={paginatedItems} deleteAction={deleteProduct} onEdit={handleOpenEditModal} />
-        )}
-      </div>
-
-      {/* --- THIS IS THE MISSING PAGINATION CODE --- */}
-      <div className="flex flex-col md:flex-row justify-between items-center mt-6">
-        <div>
-          <select 
-            value={pagination.itemsPerPage} 
-            onChange={(e) => setPagination({ currentPage: 1, itemsPerPage: Number(e.target.value) })}
-          >
-            <option value={10}>10 per page</option>
-            <option value={25}>25 per page</option>
-            <option value={50}>50 per page</option>
-          </select>
+        {/* Right Side (Desktop Toggle) */}
+        <div className="hidden md:flex bg-gray-200 p-1 rounded-lg dark:bg-gray-700 flex-shrink-0 md:ml-auto">
+          <button
+            onClick={() => setView('list')}
+            className={`px-3 py-1 rounded-md text-sm font-semibold ${view === 'list' ? 'bg-white text-apple-blue shadow dark:bg-gray-600 dark:text-gray-100' : 'bg-transparent text-gray-700 dark:text-gray-300'}`}
+          > List </button>
+          <button
+            onClick={() => setView('grid')}
+            className={`px-3 py-1 rounded-md text-sm font-semibold ${view === 'grid' ? 'bg-white text-apple-blue shadow dark:bg-gray-600 dark:text-gray-100' : 'bg-transparent text-gray-700 dark:text-gray-300'}`}
+          > Grid </button>
         </div>
-        <div className="flex gap-2 mt-4 md:mt-0">
-          <button 
-            onClick={() => setPagination({ ...pagination, currentPage: pagination.currentPage - 1 })} 
-            disabled={pagination.currentPage === 1} 
-            className="btn-secondary"
-          >
-            Previous
-          </button>
-          <span className="self-center px-4 text-gray-700">
-            Page {pagination.currentPage} of {totalPages} {/* <-- This uses totalPages */}
-          </span>
-          <button 
-            onClick={() => setPagination({ ...pagination, currentPage: pagination.currentPage + 1 })} 
-            disabled={pagination.currentPage === totalPages} 
-            className="btn-secondary"
-          >
-            Next
-          </button>
-        </div>
-      </div>
+        
+     </div>
 
-      {/* 10. Pass categories to the modal */}
-      <EditItemModal
-        product={editingProduct}
-        onClose={handleCloseEditModal}
-        onSave={handleSaveEdit}
-        categories={categories}
-      />
-    </div>
-  );
+     {/* Dynamic View & Pagination */}
+     {processedItems.length === 0 ? (
+       <NoResults />
+     ) : (
+       <>
+         <div className="md:hidden">
+           <ItemGridView items={paginatedItems} deleteAction={deleteProduct} onEdit={handleOpenEditModal} />
+         </div>
+         <div className="hidden md:block">
+           {view === 'list' ? (
+             <ItemListView items={paginatedItems} deleteAction={deleteProduct} onEdit={handleOpenEditModal} />
+           ) : (
+             <ItemGridView items={paginatedItems} deleteAction={deleteProduct} onEdit={handleOpenEditModal} />
+           )}
+         </div>
+
+         {/* Pagination */}
+         <div className="flex flex-col md:flex-row justify-between items-center mt-6">
+           <div>
+             <select
+               value={pagination.itemsPerPage}
+               onChange={(e) => setPagination({ currentPage: 1, itemsPerPage: Number(e.target.value) })}
+             >
+               <option value={10}>10 per page</option>
+               <option value={25}>25 per page</option>
+               <option value={50}>50 per page</option>
+             </select>
+           </div>
+           <div className="flex gap-2 mt-4 md:mt-0">
+             <button
+               onClick={() => setPagination({ ...pagination, currentPage: pagination.currentPage - 1 })}
+               disabled={pagination.currentPage === 1}
+               className="btn-secondary"
+             > Previous </button>
+             <span className="self-center px-4 text-gray-700 dark:text-gray-300">
+               Page {pagination.currentPage} of {totalPages}
+             </span>
+             <button
+               onClick={() => setPagination({ ...pagination, currentPage: pagination.currentPage + 1 })}
+               disabled={pagination.currentPage === totalPages}
+               className="btn-secondary"
+             > Next </button>
+           </div>
+         </div>
+       </>
+     )}
+
+     {/* Modal */}
+     <EditItemModal
+       product={editingProduct}
+       onClose={handleCloseEditModal}
+       onSave={handleSaveEdit}
+       categories={categories}
+     />
+   </div>
+ );
 }

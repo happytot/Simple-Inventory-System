@@ -38,4 +38,8 @@
     @apply px-3 py-2 bg-red-600 text-white font-semibold rounded-lg shadow-sm;
     @apply hover:bg-red-700 transition-colors duration-150;
   }
+
+  .btn-sm {
+    @apply px-3 py-1 text-sm; /* Reduced padding and text size */
+  }
 }

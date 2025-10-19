@@ -47,7 +47,27 @@ export async function addProduct(
     return { success: false, message: "Quantity must be greater than 0." };
   }
 
-  // Category Logic
+  // 👇 NEW LOGIC START: Prevent Duplicate Product Names (Fix for TC06)
+  const trimmedName = data.name.trim();
+
+  // 1. Check for duplicate name
+  const { data: duplicateCheck, error: duplicateError } = await supabase
+    .from("Products")
+    .select("name")
+    .eq("name", trimmedName) // Ensure we compare trimmed names
+    .maybeSingle(); // Use maybeSingle to get null if no match
+
+  if (duplicateError) {
+    return { success: false, message: `DB Error (Duplicate Check): ${duplicateError.message}` };
+  }
+  
+  // 2. If a product with that name is found, return an error
+  if (duplicateCheck) {
+    return { success: false, message: `Error: A product with the name "${trimmedName}" already exists.` };
+  }
+  // 👆 NEW LOGIC END
+  
+  // Category Logic (This block remains the same)
   let category_id_to_insert: number | null = null;
 
   if (categoryData.categoryId === "new") {
@@ -55,6 +75,7 @@ export async function addProduct(
     if (!categoryData.newCategoryName.trim()) {
       return { success: false, message: "New category name is required." };
     }
+    // ... (rest of the category creation logic) ...
 
     const newCategoryName = categoryData.newCategoryName.trim();
 
@@ -105,7 +126,7 @@ export async function addProduct(
     return { success: false, message: `Database error: ${error.message}` };
   }
 
-  revalidatePath("/");
+  revalidatePath("/inventory");
   revalidatePath("/categories");
 
   return {
@@ -145,7 +166,7 @@ export async function updateProduct(
     return { success: false, message: `Database error: ${error.message}` };
   }
 
-  revalidatePath("/");
+  revalidatePath("/inventory");
   return { success: true, message: `Successfully updated "${data.name}".` };
 }
 
@@ -164,7 +185,7 @@ export async function deleteProduct(formData: FormData): Promise<void> {
   }
 
   // Refresh the page or relevant path so the deleted product disappears immediately
-  revalidatePath("/");
+  revalidatePath("/inventory");
 }
 
 // --- Sign Out ---
