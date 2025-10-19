@@ -2,6 +2,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
 import { addProduct, FormState, CategoryData } from '@/app/actions'; // 1. Import new type
 import Spinner from '@/components/common/Spinner';
 
@@ -34,6 +35,7 @@ const initialCategoryState: CategoryData = { categoryId: '', newCategoryName: ''
 
 export default function AddProductForm({ categories }: AddProductFormProps) { // 5. Use prop
   const [isPending, startTransition] = useTransition();
+  const router = useRouter(); 
   const [formData, setFormData] = useState<FormState>(initialState);
   
   // 6. Add state for category data
@@ -101,6 +103,8 @@ export default function AddProductForm({ categories }: AddProductFormProps) { //
       // --- END OF MISSING CODE ---
     });
 
+  
+
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
       setSuccessMessage('');
@@ -133,6 +137,7 @@ export default function AddProductForm({ categories }: AddProductFormProps) { //
       if (result.success) {
         setSuccessMessage(result.message);
         resetForm();
+        router.refresh(); // Refresh to show the new product
       } else {
         setErrors({ server: result.message });
       }

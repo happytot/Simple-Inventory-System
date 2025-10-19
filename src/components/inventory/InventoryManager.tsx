@@ -1,7 +1,7 @@
 // src/components/inventory/InventoryManager.tsx
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import ItemListView from './ItemListView';
 import ItemGridView from './ItemGridView';
 import { deleteProduct } from '@/app/actions';
@@ -42,6 +42,13 @@ export default function InventoryManager({ initialProducts, categories }: Invent
   const [sortConfig, setSortConfig] = useState<{ key: keyof Product; direction: 'asc' | 'desc' }>({ key: 'created_at', direction: 'desc' });
   const [pagination, setPagination] = useState({ currentPage: 1, itemsPerPage: 10 });
   const [showOnlyLowStock, setShowOnlyLowStock] = useState(false);
+
+  // --- ADD THIS HOOK ---
+  // This syncs the client state when the server-fetched props change
+  useEffect(() => {
+    setProducts(initialProducts);
+  }, [initialProducts]);
+  // --- END OF HOOK ---
 
   // 4. Add state for category filter
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
