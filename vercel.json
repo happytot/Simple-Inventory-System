@@ -1,15 +1,4 @@
 {
   "version": 2,
-  "builds": [
-    { "src": "next.config.ts", "use": "@vercel/next" }
-  ],
-  "framework": "nextjs",
-  "env": {
-    "NEXT_PUBLIC_SUPABASE_URL": "https://ysybujbhhiyehylhleqn.supabase.co",
-    "NEXT_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlzeWJ1amJoaGlleWh5aGxoZXFuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA0NTk4MTUsImV4cCI6MjA3NjAzNTgxNX0.Mvo6SHYpzbfycTHxcL9qsw3ghRka9uZhMbEsinZ9vX0"
-  },
-  "routes": [
-    { "src": "/api/(.*)", "dest": "/api/$1" },
-    { "src": "/(.*)", "dest": "/" }
-  ]
+  "framework": "nextjs"
 }
