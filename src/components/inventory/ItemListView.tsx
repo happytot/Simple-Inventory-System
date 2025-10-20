@@ -1,5 +1,4 @@
 // src/components/inventory/ItemListView.tsx
-import { deleteProduct } from "@/app/actions";
 
 type Product = {
   id: number;
@@ -15,11 +14,11 @@ type Product = {
 
 type ItemListViewProps = {
   items: Product[];
-  deleteAction: typeof deleteProduct;
+  onDelete: (product: Product) => void;
   onEdit: (product: Product) => void;
 };
 
-export default function ItemListView({ items, deleteAction, onEdit }: ItemListViewProps) {
+export default function ItemListView({ items, onDelete, onEdit }: ItemListViewProps) {
   const truncate = (text: string | null, length: number) => {
     if (!text) return "—";
     return text.length > length ? text.substring(0, length) + "..." : text;
@@ -78,16 +77,15 @@ export default function ItemListView({ items, deleteAction, onEdit }: ItemListVi
                   >
                     Edit
                   </button>
-                  <form action={deleteAction} className="inline">
-                    <input type="hidden" name="id" value={product.id} />
-                    <button
-                        type="submit"
-                        className="btn-danger btn-sm"
-                        style={{ color: "#fff !important" }}
-                      >
-                        Delete
-                      </button>  
-                  </form>
+              {/* --- REPLACE <form> WITH <button> --- */}
+                            <button
+                              type="button"
+                              onClick={() => onDelete(product)}
+                              className="btn-danger btn-sm"
+                            >
+                              Delete
+                            </button>
+                            {/* --- END CHANGE --- */}
                 </div>
               </td>
             </tr>

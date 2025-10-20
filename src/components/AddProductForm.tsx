@@ -1,7 +1,7 @@
 // src/components/AddProductForm.tsx
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useState, useTransition, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { addProduct, FormState, CategoryData } from '@/app/actions';
 import Spinner from '@/components/common/Spinner';
@@ -39,6 +39,36 @@ export default function AddProductForm({ categories }: AddProductFormProps) {
   const showNewCategoryInput = categoryData.categoryId === 'new';
   const [errors, setErrors] = useState<FormErrors>({});
   const [successMessage, setSuccessMessage] = useState<string>('');
+
+  // --- ADD THIS HOOK ---
+  useEffect(() => {
+    // If there is a success message, set a timer
+    if (successMessage) {
+      const timer = setTimeout(() => {
+        setSuccessMessage(''); // Clear the message after 3 seconds
+      }, 3000); // 3000 milliseconds = 3 seconds
+
+      // Clean up the timer if the component unmounts or the message changes
+      return () => clearTimeout(timer);
+    }
+  }, [successMessage]); // This effect runs every time 'successMessage' changes
+  // --- END OF HOOK ---
+
+  // ... (after the successMessage useEffect)
+
+  // --- ADD THIS HOOK FOR THE ERROR MESSAGE ---
+  useEffect(() => {
+    // If there is a server error, set a timer
+    if (errors.server) {
+      const timer = setTimeout(() => {
+        setErrors(prev => ({ ...prev, server: undefined })); // Clear the server error
+      }, 3000); // 3000 milliseconds = 3 seconds
+
+      // Clean up the timer
+      return () => clearTimeout(timer);
+    }
+  }, [errors.server]); // This effect runs every time 'errors.server' changes
+  // --- END OF HOOK ---
 
   const validateField = (name: string, value: string | number): string | undefined => {
     switch (name) {
@@ -147,17 +177,31 @@ export default function AddProductForm({ categories }: AddProductFormProps) {
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         {/* **2. Updated Message Styles:** Softer background colors */}
-        {successMessage && (
+       {/* --- UPDATED SUCCESS MESSAGE WITH ANIMATION --- */}
+        <div
+          className={`
+            transition-all duration-500 ease-in-out
+            ${successMessage ? 'max-h-40 opacity-100' : 'max-h-0 opacity-0'}
+          `}
+          style={{ overflow: 'hidden' }} // This clips the content during animation
+        >
           <div className="p-3 bg-green-50 text-green-700 border border-green-200 rounded-lg">
             {successMessage}
           </div>
-        )}
+        </div>
 
-        {errors.server && (
+        {/* --- UPDATED ERROR MESSAGE WITH ANIMATION --- */}
+        <div
+          className={`
+            transition-all duration-500 ease-in-out
+            ${errors.server ? 'max-h-40 opacity-100' : 'max-h-0 opacity-0'}
+          `}
+          style={{ overflow: 'hidden' }} // This clips the content during animation
+        >
           <div className="p-3 bg-red-50 text-red-700 border border-red-200 rounded-lg">
             {errors.server}
           </div>
-        )}
+        </div>
 
         <div className="flex flex-col sm:flex-row gap-4">
           {/* Name Field */}

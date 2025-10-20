@@ -1,7 +1,8 @@
 // src/components/inventory/InventoryManager.tsx
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
 import ItemListView from './ItemListView';
 import ItemGridView from './ItemGridView';
 import { deleteProduct } from '@/app/actions';
@@ -10,6 +11,7 @@ import LowStockAlert from './LowStockAlert';
 import useDebounce from '@/hooks/useDebounce';
 import NoResults from '@/components/common/NoResults';
 import FilterDropdown from './FilterDropdown';
+import ConfirmationModal from '@/components/common/ConfirmationModal';  
 
 // --- TYPE DEFINITIONS ---
 type Category = {
@@ -58,6 +60,12 @@ export default function InventoryManager({ initialProducts, categories }: Invent
 
  // **1. Re-add sortConfig state**
  const [sortConfig, setSortConfig] = useState<{ key: keyof Product; direction: 'asc' | 'desc' }>({ key: 'created_at', direction: 'desc' });
+
+ // --- ADD THESE ---
+  const [isDeleting, startDeleteTransition] = useTransition();
+  const [productToDelete, setProductToDelete] = useState<Product | null>(null);
+  const router = useRouter();
+  // --- END ADD ---
 
  useEffect(() => {
    setProducts(initialProducts);
@@ -191,6 +199,30 @@ export default function InventoryManager({ initialProducts, categories }: Invent
     resetToPageOne(); // Resetting page on sort makes sense
   };
 
+  // --- ADD THESE HANDLERS ---
+const handleOpenDeleteModal = (product: Product) => {
+  setProductToDelete(product);
+};
+
+const handleCloseDeleteModal = () => {
+  setProductToDelete(null);
+};
+
+const handleConfirmDelete = () => {
+  if (!productToDelete) return;
+
+  startDeleteTransition(async () => {
+    // Create FormData to pass to the server action
+    const formData = new FormData();
+    formData.append('id', productToDelete.id.toString());
+
+    await deleteProduct(formData);
+
+    setProductToDelete(null); // Close the modal
+    router.refresh(); // **Force client-side refresh (Fix for TC13)**
+  });
+};
+// --- END ADD ---
 
  // --- RENDER ---
  return (
@@ -308,16 +340,16 @@ export default function InventoryManager({ initialProducts, categories }: Invent
        <NoResults />
      ) : (
        <>
-         <div className="md:hidden">
-           <ItemGridView items={paginatedItems} deleteAction={deleteProduct} onEdit={handleOpenEditModal} />
-         </div>
-         <div className="hidden md:block">
-           {view === 'list' ? (
-             <ItemListView items={paginatedItems} deleteAction={deleteProduct} onEdit={handleOpenEditModal} />
-           ) : (
-             <ItemGridView items={paginatedItems} deleteAction={deleteProduct} onEdit={handleOpenEditModal} />
-           )}
-         </div>
+      <div className="md:hidden">
+          <ItemGridView items={paginatedItems} onDelete={handleOpenDeleteModal} onEdit={handleOpenEditModal} />
+        </div>
+        <div className="hidden md:block">
+          {view === 'list' ? (
+            <ItemListView items={paginatedItems} onDelete={handleOpenDeleteModal} onEdit={handleOpenEditModal} />
+          ) : (
+            <ItemGridView items={paginatedItems} onDelete={handleOpenDeleteModal} onEdit={handleOpenEditModal} />
+          )}
+      </div>
 
          {/* Pagination */}
          <div className="flex flex-col md:flex-row justify-between items-center mt-6">
@@ -349,6 +381,25 @@ export default function InventoryManager({ initialProducts, categories }: Invent
          </div>
        </>
      )}
+
+     {/* --- ADD THE MODAL RENDER --- */}
+ <ConfirmationModal
+    isOpen={!!productToDelete}
+    onClose={handleCloseDeleteModal}
+    onConfirm={handleConfirmDelete}
+    isConfirming={isDeleting}
+    title="Delete Product?"
+    message={
+      productToDelete && ( // Show product name in message
+        <>
+          Are you sure you want to delete 
+          <strong className="text-gray-900 dark:text-gray-100"> {productToDelete.name}</strong>?
+          <br />
+          This action cannot be undone.
+        </>
+      )
+    }
+ />
 
      {/* Modal */}
      <EditItemModal
