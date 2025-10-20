@@ -62,7 +62,7 @@ export default function FilterDropdown({
       {/* Dropdown Menu */}
       {isOpen && (
         // --- REMOVED bg-white dark:bg-gray-800 FROM THIS LINE ---
-        <div className="absolute right-0 mt-2 w-72 origin-top-right rounded-lg shadow-xl ring-1 ring-black ring-opacity-5 focus:outline-none z-10 p-4">
+<div className="absolute right-0 mt-2 w-72 origin-top-right rounded-lg shadow-xl ring-1 ring-gray-700 bg-gray-800 text-white focus:outline-none z-10 p-4">
           <div className="flex flex-col gap-4">
             {/* Date Added Filter */}
             <div>
