@@ -1,9 +1,12 @@
+// src/app/layout.tsx
+// NO 'use client' here
+
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-// We'll need to import your Header and Footer
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
+import Header from "@/components/Header"; // Import Server Component (now OK)
+import Footer from "@/components//Footer"; // Import Server Component (now OK)
+import { ToastProvider } from "@/context/ToastContext"; // Just import the provider
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -19,15 +22,17 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      {/* Apply the base styles to the body tag */}
-      <body 
-        className={`${inter.className} min-h-screen flex flex-col bg-gray-50 text-gray-900`}
-      >
-        <Header />
-        <main className="flex-grow">
-          {children}
-        </main>
-        <Footer />
+      <body className={`${inter.className} min-h-screen flex flex-col bg-gray-50 text-gray-900`}>
+        {/* ToastProvider is a Client Component, but it's OK to
+            use it inside a Server Component (layout.tsx) */}
+        <ToastProvider>
+          <Header />
+          <main className="flex-grow">
+            {children}
+          </main>
+          <Footer />
+          {/* No ToastContainer here - it's inside the provider now */}
+        </ToastProvider>
       </body>
     </html>
   );

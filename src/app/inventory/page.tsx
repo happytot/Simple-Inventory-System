@@ -43,8 +43,9 @@ export default async function InventoryListPage() {
     .order("name", { ascending: true });
 
   if (productError || categoryError) {
+    // Apply responsive padding to error state as well
     return (
-      <main className="container mx-auto p-8">
+      <main className="container mx-auto px-4 py-8 sm:px-6 lg:px-8">
         <p className="text-red-500">
           {productError ? `Error fetching products: ${productError.message}` : ''}
           {categoryError ? `Error fetching categories: ${categoryError.message}` : ''}
@@ -55,7 +56,8 @@ export default async function InventoryListPage() {
 
   // --- RENDER ---
   return (
-    <main className="container mx-auto p-8">
+    // **CHANGED PADDING HERE**
+    <main className="container mx-auto px-4 py-8 sm:px-6 lg:px-8">
       {/* Page Title */}
       <div className="mb-6">
         <h1 className="text-3xl font-bold">Inventory List</h1>

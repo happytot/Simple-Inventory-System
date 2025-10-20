@@ -228,7 +228,7 @@ export default function InventoryManager({ initialProducts, categories }: Invent
          onClick={() => setIsAddModalOpen(true)}
          className="btn-primary"
        >
-         + Add New Product
+         + Add Product
        </button>
      </div>
      {/* --- END MOVE --- */}

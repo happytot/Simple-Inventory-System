@@ -2,11 +2,11 @@
 'use client';
 
 import { useState, useTransition, useEffect } from 'react';
-import { useRouter } from 'next/navigation'; // Keep useRouter
+import { useRouter } from 'next/navigation';
 import { addProduct, FormState, CategoryData } from '@/app/actions';
 import Spinner from '@/components/common/Spinner';
-
-// Type Definitions (Copied from AddProductForm)
+import { useToast } from '@/context/ToastContext'; // <-- Step 3: Import the hook
+// Type Definitions
 type Category = {
   id: number;
   name: string;
@@ -26,44 +26,30 @@ const initialState: FormState = {
   description: '',
   quantity: 0,
   product_id: null,
-  low_stock_threshold: 10, // Default threshold
+  low_stock_threshold: 10,
 };
 
 const initialCategoryState: CategoryData = { categoryId: '', newCategoryName: '' };
 
-// --- NEW MODAL PROPS ---
 type AddProductModalProps = {
   isOpen: boolean;
   onClose: () => void;
   categories: Category[];
-  // Optional: Callback after successful add if needed
-  // onAddSuccess?: () => void;
 };
 
-// --- AddProductForm logic moved inside this component ---
 export default function AddProductModal({ isOpen, onClose, categories }: AddProductModalProps) {
   const [isPending, startTransition] = useTransition();
-  const router = useRouter(); // Still need this for refresh
+  const router = useRouter();
+  const { addToast: showToast } = useToast(); // <-- Step 4: Use the hook
   const [formData, setFormData] = useState<FormState>(initialState);
   const [categoryData, setCategoryData] = useState<CategoryData>(initialCategoryState);
   const showNewCategoryInput = categoryData.categoryId === 'new';
   const [errors, setErrors] = useState<FormErrors>({});
-  const [successMessage, setSuccessMessage] = useState<string>('');
+  // const [successMessage, setSuccessMessage] = useState<string>(''); // <-- Step 1: REMOVE successMessage state
 
-  // Auto-clear success message and close modal
-  useEffect(() => {
-    if (successMessage) {
-      const timer = setTimeout(() => {
-        setSuccessMessage('');
-        resetForm(); // Reset form state
-        onClose(); // Close the modal
-        router.refresh(); // Refresh inventory list AFTER closing
-      }, 2000); // Close after 2 seconds
-      return () => clearTimeout(timer);
-    }
-  }, [successMessage, onClose, router]); // Added router to dependencies
+  // Step 1: REMOVE useEffect for successMessage
 
-  // Auto-clear server error message
+  // Auto-clear server error message (Keep this)
   useEffect(() => {
     if (errors.server) {
       const timer = setTimeout(() => {
@@ -73,21 +59,20 @@ export default function AddProductModal({ isOpen, onClose, categories }: AddProd
     }
   }, [errors.server]);
 
-  // Reset form when modal opens/closes (optional but good practice)
+  // Reset form when modal closes (Keep this)
   useEffect(() => {
     if (!isOpen) {
-      // Delay reset slightly to allow fade-out animation if you add one
       const timer = setTimeout(() => {
         resetForm();
-        setSuccessMessage('');
+        // setSuccessMessage(''); // No longer needed
         setErrors({});
-      }, 300); // Adjust timing if needed
+      }, 300);
       return () => clearTimeout(timer);
     }
   }, [isOpen]);
 
   const validateField = (name: string, value: string | number | null | undefined): string | undefined => {
-    // ... (Keep existing validation logic) ...
+    // ... (validation logic remains the same)
     switch (name) {
         case 'name':
           if (typeof value !== 'string' || !value.trim()) return 'Name is required.';
@@ -120,32 +105,30 @@ export default function AddProductModal({ isOpen, onClose, categories }: AddProd
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    // Handle number inputs specifically if needed, otherwise rely on Number() conversion later
     setFormData((prev) => ({ ...prev, [name]: value }));
-
-    // Re-validate on change
     const error = validateField(name, value);
     setErrors((prev) => ({ ...prev, [name]: error, server: undefined }));
-    setSuccessMessage(''); // Clear success on edit
+    // setSuccessMessage(''); // No longer needed
   };
 
   const handleCategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     setCategoryData({ ...categoryData, categoryId: e.target.value });
-    setErrors(prev => ({ ...prev, server: undefined })); // Clear server errors on change
-    setSuccessMessage('');
+    setErrors(prev => ({ ...prev, server: undefined }));
+    // setSuccessMessage(''); // No longer needed
   };
 
   const handleNewCategoryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setCategoryData({ ...categoryData, newCategoryName: e.target.value });
-     setErrors(prev => ({ ...prev, server: undefined })); // Clear server errors on change
-    setSuccessMessage('');
+    setErrors(prev => ({ ...prev, server: undefined }));
+    // setSuccessMessage(''); // No longer needed
   };
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setSuccessMessage(''); // Clear previous success
+    // setSuccessMessage(''); // No longer needed
+    setErrors(prev => ({ ...prev, server: undefined })); // Clear server error on new submit
 
-    // Final validation
+    // ... (Validation logic remains the same) ...
     const newErrors: FormErrors = {};
     let isValid = true;
     (Object.keys(initialState) as Array<keyof FormState>).forEach((key) => {
@@ -155,7 +138,6 @@ export default function AddProductModal({ isOpen, onClose, categories }: AddProd
         isValid = false;
       }
     });
-
     if (!categoryData.categoryId) {
        newErrors.server = 'Please select a category.';
        isValid = false;
@@ -164,28 +146,34 @@ export default function AddProductModal({ isOpen, onClose, categories }: AddProd
        newErrors.server = 'Please enter a name for the new category.';
        isValid = false;
     }
-
     setErrors(newErrors);
     if (!isValid) return;
 
-
-    // Prepare data for server action, ensuring correct types
-    const dataToSend: FormState = {
+    // ... (Prepare dataToSend remains the same) ...
+     const dataToSend: FormState = {
        ...formData,
        name: formData.name || '',
        description: formData.description || '',
-       quantity: Number(formData.quantity) || 0, // Ensure it's a number
+       quantity: Number(formData.quantity) || 0,
        product_id: formData.product_id || null,
-       low_stock_threshold: Number(formData.low_stock_threshold) ?? 10 // Ensure it's a number
+       low_stock_threshold: Number(formData.low_stock_threshold) ?? 10
     };
+
+
+    // <-- Step 1.6: Close modal immediately -->
+    onClose();
 
     startTransition(async () => {
       const result = await addProduct(dataToSend, categoryData);
+      console.log('Add Product Result:', result);
       if (result.success) {
-        setSuccessMessage(result.message);
-        // Don't reset/close here, useEffect handles it
+        console.log("Calling showToast with:", result.message); // <-- ADD THIS LINE        // <-- Step 1.6: Call showToast, keep router.refresh -->
+        showToast(result.message, 'success');
+        router.refresh();
       } else {
         setErrors({ server: result.message });
+        // Optionally show error toast
+        // showToast(result.message, 'error');
       }
     });
   };
@@ -196,18 +184,15 @@ export default function AddProductModal({ isOpen, onClose, categories }: AddProd
     setErrors({});
   };
 
-  // Use onClose prop for cancel/close actions
   const handleCancel = () => {
     onClose();
   };
 
-  if (!isOpen) return null; // Don't render if not open
+  if (!isOpen) return null;
 
-  // --- MODAL JSX STRUCTURE ---
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <div className="bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-xl w-full max-w-lg relative">
-        {/* Close Button */}
+      <div className="bg-white dark:bg-gray-800 px-6 pt-10 pb-8 sm:p-8 rounded-2xl shadow-xl w-full max-w-md sm:max-w-lg relative">
         <button
           onClick={handleCancel}
           disabled={isPending}
@@ -219,73 +204,73 @@ export default function AddProductModal({ isOpen, onClose, categories }: AddProd
           </svg>
         </button>
 
+        {/* <-- Step 1.5: Adjusted title margin --> */}
         <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-gray-100">Add New Product</h2>
 
-        {/* --- FORM COPIED FROM AddProductForm --- */}
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
 
-          {/* Animated Success/Error Messages */}
-          <div className={`transition-all duration-500 ease-in-out ${successMessage ? 'max-h-40 opacity-100' : 'max-h-0 opacity-0'}`} style={{ overflow: 'hidden' }}>
-            <div className="p-3 bg-green-50 text-green-700 border border-green-200 rounded-lg"> {successMessage} </div>
-          </div>
+          {/* Step 1.4: REMOVE success message div */}
+
+          {/* Keep error message div */}
           <div className={`transition-all duration-500 ease-in-out ${errors.server ? 'max-h-40 opacity-100' : 'max-h-0 opacity-0'}`} style={{ overflow: 'hidden' }}>
             <div className="p-3 bg-red-50 text-red-700 border border-red-200 rounded-lg"> {errors.server} </div>
           </div>
 
-          {/* Form Fields (Copied and adjusted) */}
-          <div className="flex flex-col sm:flex-row gap-4">
-            <div className="flex-grow">
-              <label htmlFor="modal-name" className="block text-sm font-medium text-white mb-1">Product Name</label>
-              <input type="text" id="modal-name" name="name" value={formData.name} onChange={handleChange} maxLength={100} required className={errors.name ? 'border-red-500 ring-1 ring-red-500' : ''} />
+          {/* Form Fields... (remain the same) */}
+          <div className="flex flex-col gap-4"> {/* Name & Quantity Group */}
+             <div className="w-full"> {/* Name */}
+              <label htmlFor="modal-name" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Product Name</label>
+              <input type="text" id="modal-name" name="name" value={formData.name} onChange={handleChange} maxLength={100} required className={`w-full ${errors.name ? 'border-red-500 ring-1 ring-red-500' : ''}`} />
               {errors.name && <p className="text-red-600 text-sm mt-1">{errors.name}</p>}
             </div>
-            <div className="w-full sm:w-32">
-              <label htmlFor="modal-quantity" className="block text-sm font-medium text-white mb-1">Quantity</label>
-              <input type="number" id="modal-quantity" name="quantity" value={formData.quantity} onChange={handleChange} min="1" step="1" required className={errors.quantity ? 'border-red-500 ring-1 ring-red-500' : ''} />
+            <div className="w-full sm:w-32"> {/* Quantity */}
+              <label htmlFor="modal-quantity" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Quantity</label>
+              <input type="number" id="modal-quantity" name="quantity" value={formData.quantity} onChange={handleChange} min="1" step="1" required className={`w-full ${errors.quantity ? 'border-red-500 ring-1 ring-red-500' : ''}`} />
               {errors.quantity && <p className="text-red-600 text-sm mt-1">{errors.quantity}</p>}
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-4">
-              <div className="flex-grow">
-                  <label htmlFor="modal-product_id" className="block text-sm font-medium text-white mb-1">Product ID (Optional)</label>
-                  <input type="text" id="modal-product_id" name="product_id" value={formData.product_id || ''} onChange={handleChange} maxLength={50} className={errors.product_id ? 'border-red-500 ring-1 ring-red-500' : ''} />
+          <div className="flex flex-col sm:flex-row gap-4"> {/* Product ID & Threshold Group */}
+              <div className="flex-grow"> {/* Product ID */}
+                  <label htmlFor="modal-product_id" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Product ID (Optional)</label>
+                  <input type="text" id="modal-product_id" name="product_id" value={formData.product_id || ''} onChange={handleChange} maxLength={50} className={`w-full ${errors.product_id ? 'border-red-500 ring-1 ring-red-500' : ''}`} />
                   {errors.product_id && <p className="text-red-600 text-sm mt-1">{errors.product_id}</p>}
               </div>
-               <div className="flex-grow"> {/* Adjusted width */}
-                  <label htmlFor="modal-low_stock_threshold" className="block text-sm font-medium text-white mb-1">Low Stock Threshold</label>
-                  <input type="number" id="modal-low_stock_threshold" name="low_stock_threshold" value={formData.low_stock_threshold ?? 10} onChange={handleChange} min="0" step="1" required className={errors.low_stock_threshold ? 'border-red-500 ring-1 ring-red-500' : ''} />
+               <div className="flex-grow"> {/* Threshold */}
+                  <label htmlFor="modal-low_stock_threshold" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Low Stock Threshold</label>
+                  <input type="number" id="modal-low_stock_threshold" name="low_stock_threshold" value={formData.low_stock_threshold ?? 10} onChange={handleChange} min="0" step="1" required className={`w-full ${errors.low_stock_threshold ? 'border-red-500 ring-1 ring-red-500' : ''}`} />
                   {errors.low_stock_threshold && <p className="text-red-600 text-sm mt-1">{errors.low_stock_threshold}</p>}
               </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-4">
-            <div className="flex-grow">
-              <label htmlFor="modal-category" className="block text-sm font-medium text-white mb-1">Category</label>
-              <select id="modal-category" name="category" value={categoryData.categoryId} onChange={handleCategoryChange} required>
+          <div className="flex flex-col sm:flex-row gap-4"> {/* Category Group */}
+            <div className="flex-grow"> {/* Category Select */}
+              <label htmlFor="modal-category" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Category</label>
+              <select id="modal-category" name="category" value={categoryData.categoryId} onChange={handleCategoryChange} required className="w-full">
                 <option value="" disabled>-- Select a category --</option>
                 {categories.map((cat) => (<option key={cat.id} value={cat.id}>{cat.name}</option>))}
                 <option value="new">-- Add New Category --</option>
               </select>
             </div>
             {showNewCategoryInput && (
-              <div className="flex-grow">
-                <label htmlFor="modal-newCategoryName" className="block text-sm font-medium text-white mb-1">New Category Name</label>
-                <input type="text" id="modal-newCategoryName" name="newCategoryName" value={categoryData.newCategoryName} onChange={handleNewCategoryChange} placeholder="e.g., Hardware" required />
+              <div className="flex-grow"> {/* New Category Name */}
+                <label htmlFor="modal-newCategoryName" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">New Category Name</label>
+                <input type="text" id="modal-newCategoryName" name="newCategoryName" value={categoryData.newCategoryName} onChange={handleNewCategoryChange} placeholder="e.g., Hardware" required className="w-full" />
               </div>
             )}
           </div>
 
-          <div>
-            <label htmlFor="modal-description" className="block text-sm font-medium text-white mb-1">Description (Optional)</label>
-            <textarea id="modal-description" name="description" value={formData.description || ''} onChange={handleChange} maxLength={500} rows={3} className={errors.description ? 'border-red-500 ring-1 ring-red-500' : ''} />
+          <div> {/* Description */}
+            <label htmlFor="modal-description" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Description (Optional)</label>
+            <textarea id="modal-description" name="description" value={formData.description || ''} onChange={handleChange} maxLength={500} rows={3} className={`w-full ${errors.description ? 'border-red-500 ring-1 ring-red-500' : ''}`} />
             {errors.description && <p className="text-red-500 text-sm mt-1">{errors.description}</p>}
           </div>
 
+
           {/* Buttons */}
-          <div className="flex gap-4 pt-2">
-            <button type="submit" disabled={isPending} className="btn-primary flex items-center justify-center gap-2"> {isPending && <Spinner />} {isPending ? 'Adding...' : 'Add Product'} </button>
-            <button type="button" onClick={handleCancel} disabled={isPending} className="btn-secondary"> Cancel </button>
+          <div className="flex flex-col sm:flex-row gap-4 pt-2">
+            <button type="submit" disabled={isPending} className="btn-primary flex items-center justify-center gap-2 w-full sm:w-auto"> {isPending && <Spinner />} {isPending ? 'Adding...' : 'Add Product'} </button>
+            <button type="button" onClick={handleCancel} disabled={isPending} className="btn-secondary w-full sm:w-auto"> Cancel </button>
           </div>
         </form>
       </div>
