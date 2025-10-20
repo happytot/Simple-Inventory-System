@@ -11,7 +11,8 @@ import LowStockAlert from './LowStockAlert';
 import useDebounce from '@/hooks/useDebounce';
 import NoResults from '@/components/common/NoResults';
 import FilterDropdown from './FilterDropdown';
-import ConfirmationModal from '@/components/common/ConfirmationModal';  
+import ConfirmationModal from '@/components/common/ConfirmationModal';
+import AddProductModal from './AddProductModal'; // Ensure this is imported
 
 // --- TYPE DEFINITIONS ---
 type Category = {
@@ -58,14 +59,13 @@ export default function InventoryManager({ initialProducts, categories }: Invent
  const [dateFilter, setDateFilter] = useState(initialFilterState.date);
  const [quantityFilter, setQuantityFilter] = useState(initialFilterState.quantity);
 
- // **1. Re-add sortConfig state**
  const [sortConfig, setSortConfig] = useState<{ key: keyof Product; direction: 'asc' | 'desc' }>({ key: 'created_at', direction: 'desc' });
 
- // --- ADD THESE ---
-  const [isDeleting, startDeleteTransition] = useTransition();
-  const [productToDelete, setProductToDelete] = useState<Product | null>(null);
-  const router = useRouter();
-  // --- END ADD ---
+ const [isDeleting, startDeleteTransition] = useTransition();
+ const [productToDelete, setProductToDelete] = useState<Product | null>(null);
+ const router = useRouter();
+
+ const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
  useEffect(() => {
    setProducts(initialProducts);
@@ -80,9 +80,7 @@ export default function InventoryManager({ initialProducts, categories }: Invent
 
  const processedItems = useMemo(() => {
    let filteredItems = products;
-
-   // ... (A-E Filtering Logic remains the same) ...
-   // A. Apply Stock Status Filter
+   // ... (Filtering Logic A-E) ...
     if (stockStatusFilter === 'inStock') {
       filteredItems = filteredItems.filter(p => p.quantity >= p.low_stock_threshold);
     } else if (stockStatusFilter === 'lowStock') {
@@ -90,13 +88,9 @@ export default function InventoryManager({ initialProducts, categories }: Invent
     } else if (stockStatusFilter === 'outOfStock') {
       filteredItems = filteredItems.filter(p => p.quantity === 0);
     }
-
-    // B. Apply Category Filter
     if (categoryFilter !== 'all') {
       filteredItems = filteredItems.filter(p => p.category_id === Number(categoryFilter));
     }
-
-    // C. Apply Date Filter
     if (dateFilter !== 'all') {
       const now = new Date();
       const filterDate = new Date(now);
@@ -104,8 +98,6 @@ export default function InventoryManager({ initialProducts, categories }: Invent
       filterDate.setDate(now.getDate() - daysAgo);
       filteredItems = filteredItems.filter(p => new Date(p.created_at) >= filterDate);
     }
-
-    // D. Apply Quantity Range Filter
     const minQty = parseFloat(quantityFilter.min);
     const maxQty = parseFloat(quantityFilter.max);
     if (!isNaN(minQty)) {
@@ -114,8 +106,6 @@ export default function InventoryManager({ initialProducts, categories }: Invent
     if (!isNaN(maxQty)) {
       filteredItems = filteredItems.filter(p => p.quantity <= maxQty);
     }
-
-    // E. Apply Debounced Search Filter (Name, Description, ID)
     if (debouncedSearchTerm) {
       const lowerSearch = debouncedSearchTerm.toLowerCase();
       filteredItems = filteredItems.filter(p =>
@@ -125,21 +115,18 @@ export default function InventoryManager({ initialProducts, categories }: Invent
       );
     }
 
-   // **3. Re-add Sorting Logic**
+   // Sorting Logic
    if (sortConfig.key) {
-      // Create a mutable copy before sorting
-      filteredItems = [...filteredItems].sort((a, b) => {
-        const valA = a[sortConfig.key];
-        const valB = b[sortConfig.key];
-        // Handle nulls if necessary
-        if (valA === null) return sortConfig.direction === 'asc' ? 1 : -1;
-        if (valB === null) return sortConfig.direction === 'asc' ? -1 : 1;
-
-        if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
-        if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
-        return 0;
-      });
-    }
+     filteredItems = [...filteredItems].sort((a, b) => {
+       const valA = a[sortConfig.key];
+       const valB = b[sortConfig.key];
+       if (valA === null) return sortConfig.direction === 'asc' ? 1 : -1;
+       if (valB === null) return sortConfig.direction === 'asc' ? -1 : 1;
+       if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
+       if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
+       return 0;
+     });
+   }
 
    return filteredItems;
  }, [
@@ -149,17 +136,33 @@ export default function InventoryManager({ initialProducts, categories }: Invent
    categoryFilter,
    dateFilter,
    quantityFilter,
-   sortConfig // **3. Add sortConfig to dependency array**
+   sortConfig
  ]);
 
- // Early return for empty initial products (TC17 fix)
+ // Early return for empty initial products
  if (initialProducts.length === 0) {
    return (
      <div className="text-center bg-white p-12 rounded-2xl shadow-lg dark:bg-gray-800">
+       {/* --- ADD BUTTON HERE TOO for empty state --- */}
+       <div className="mb-6 flex justify-end">
+         <button
+           onClick={() => setIsAddModalOpen(true)}
+           className="btn-primary mb-4" // Added margin-bottom
+         >
+           + Add New Product
+         </button>
+       </div>
+       {/* --- END ADD --- */}
        <h3 className="mt-2 text-xl font-semibold text-gray-900 dark:text-gray-100">No Products Yet</h3>
        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-         Add your first product using the form on the Dashboard page.
+         Add your first product using the button above.
        </p>
+        {/* Render Add modal even in empty state */}
+       <AddProductModal
+          isOpen={isAddModalOpen}
+          onClose={() => setIsAddModalOpen(false)}
+          categories={categories}
+       />
      </div>
    );
  }
@@ -174,7 +177,7 @@ export default function InventoryManager({ initialProducts, categories }: Invent
  const handleOpenEditModal = (product: Product) => setEditingProduct(product);
  const handleCloseEditModal = () => setEditingProduct(null);
  const handleSaveEdit = (updatedProduct: Product) => {
-   setProducts(products.map(p => p.id === updatedProduct.id ? updatedProduct : p));
+  setProducts(products.map(p => p.id === updatedProduct.id ? updatedProduct : p));
  };
 
  const handleClearFilters = () => {
@@ -183,50 +186,53 @@ export default function InventoryManager({ initialProducts, categories }: Invent
    setCategoryFilter(initialFilterState.category);
    setDateFilter(initialFilterState.date);
    setQuantityFilter(initialFilterState.quantity);
-   setSortConfig({ key: 'created_at', direction: 'desc' }); // Also reset sort
+   setSortConfig({ key: 'created_at', direction: 'desc' });
    setPagination({ ...pagination, currentPage: 1 });
  };
 
  const resetToPageOne = () => setPagination({ ...pagination, currentPage: 1 });
 
- // **2. Re-add handleSort function**
  const handleSort = (key: keyof Product) => {
-    setSortConfig((prevConfig) => {
-      // If same key, toggle direction, otherwise set new key and default to 'asc'
-      const direction = prevConfig.key === key && prevConfig.direction === 'asc' ? 'desc' : 'asc';
-      return { key, direction };
-    });
-    resetToPageOne(); // Resetting page on sort makes sense
-  };
+   setSortConfig((prevConfig) => {
+     const direction = prevConfig.key === key && prevConfig.direction === 'asc' ? 'desc' : 'asc';
+     return { key, direction };
+   });
+   resetToPageOne();
+ };
 
-  // --- ADD THESE HANDLERS ---
-const handleOpenDeleteModal = (product: Product) => {
+ // Delete Handlers
+ const handleOpenDeleteModal = (product: Product) => {
   setProductToDelete(product);
-};
-
-const handleCloseDeleteModal = () => {
+ };
+ const handleCloseDeleteModal = () => {
   setProductToDelete(null);
-};
-
-const handleConfirmDelete = () => {
+ };
+ const handleConfirmDelete = () => {
   if (!productToDelete) return;
-
   startDeleteTransition(async () => {
-    // Create FormData to pass to the server action
     const formData = new FormData();
     formData.append('id', productToDelete.id.toString());
-
     await deleteProduct(formData);
-
-    setProductToDelete(null); // Close the modal
-    router.refresh(); // **Force client-side refresh (Fix for TC13)**
+    setProductToDelete(null);
+    router.refresh();
   });
-};
-// --- END ADD ---
+ };
 
  // --- RENDER ---
+ // ** REMOVED EXTRA return AND div HERE **
  return (
    <div>
+     {/* --- MOVED "Add New Product" BUTTON HERE --- */}
+     <div className="mb-6 flex justify-end">
+       <button
+         onClick={() => setIsAddModalOpen(true)}
+         className="btn-primary"
+       >
+         + Add New Product
+       </button>
+     </div>
+     {/* --- END MOVE --- */}
+
      <LowStockAlert items={lowStockItems} onEdit={handleOpenEditModal} />
 
      {/* Search Bar */}
@@ -297,42 +303,41 @@ const handleConfirmDelete = () => {
 
      {/* Result Count, Sort & View Toggle Row */}
      <div className="flex flex-col md:flex-row md:items-center mb-4 gap-4">
-        {/* Left Side */}
-        <div className="flex items-center gap-4 w-full md:w-auto">
-          <span className="text-sm font-medium text-gray-700 dark:text-gray-300 flex-shrink-0 whitespace-nowrap">
-            Showing {processedItems.length} of {products.length} items
-          </span>
-          {/* Sort Dropdown */}
-          <div className="relative min-w-[150px] flex-shrink">
-            <label htmlFor="sortOrder" className="sr-only">Sort by</label>
-            <select
-              id="sortOrder"
-              className="text-sm w-full appearance-none pl-3 pr-8 py-2 border border-gray-200 rounded-lg bg-gray-100 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-apple-blue"
-              value={sortConfig.key} // Use state value
-              onChange={(e) => handleSort(e.target.value as keyof Product)} // Use handler
-            >
-              <option value="created_at">Sort: Date Added</option>
-              <option value="name">Sort: Name</option>
-              <option value="quantity">Sort: Quantity</option>
-            </select>
-            {/* Arrow */}
-            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700 dark:text-gray-300">
-                <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
-            </div>
-          </div>
-        </div>
-        {/* Right Side (Desktop Toggle) */}
-        <div className="hidden md:flex bg-gray-200 p-1 rounded-lg dark:bg-gray-700 flex-shrink-0 md:ml-auto">
-          <button
-            onClick={() => setView('list')}
-            className={`px-3 py-1 rounded-md text-sm font-semibold ${view === 'list' ? 'bg-white text-apple-blue shadow dark:bg-gray-600 dark:text-gray-100' : 'bg-transparent text-gray-700 dark:text-gray-300'}`}
-          > List </button>
-          <button
-            onClick={() => setView('grid')}
-            className={`px-3 py-1 rounded-md text-sm font-semibold ${view === 'grid' ? 'bg-white text-apple-blue shadow dark:bg-gray-600 dark:text-gray-100' : 'bg-transparent text-gray-700 dark:text-gray-300'}`}
-          > Grid </button>
-        </div>
-        
+       {/* Left Side */}
+       <div className="flex items-center gap-4 w-full md:w-auto">
+         <span className="text-sm font-medium text-gray-700 dark:text-gray-300 flex-shrink-0 whitespace-nowrap">
+           Showing {processedItems.length} of {products.length} items
+         </span>
+         {/* Sort Dropdown */}
+         <div className="relative min-w-[150px] flex-shrink">
+           <label htmlFor="sortOrder" className="sr-only">Sort by</label>
+           <select
+             id="sortOrder"
+             className="text-sm w-full appearance-none pl-3 pr-8 py-2 border border-gray-200 rounded-lg bg-gray-100 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-apple-blue"
+             value={sortConfig.key}
+             onChange={(e) => handleSort(e.target.value as keyof Product)}
+           >
+             <option value="created_at">Sort: Date Added</option>
+             <option value="name">Sort: Name</option>
+             <option value="quantity">Sort: Quantity</option>
+           </select>
+           {/* Arrow */}
+           <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700 dark:text-gray-300">
+               <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+           </div>
+         </div>
+       </div>
+       {/* Right Side (Desktop Toggle) */}
+       <div className="hidden md:flex bg-gray-200 p-1 rounded-lg dark:bg-gray-700 flex-shrink-0 md:ml-auto">
+         <button
+           onClick={() => setView('list')}
+           className={`px-3 py-1 rounded-md text-sm font-semibold ${view === 'list' ? 'bg-white text-apple-blue shadow dark:bg-gray-600 dark:text-gray-100' : 'bg-transparent text-gray-700 dark:text-gray-300'}`}
+         > List </button>
+         <button
+           onClick={() => setView('grid')}
+           className={`px-3 py-1 rounded-md text-sm font-semibold ${view === 'grid' ? 'bg-white text-apple-blue shadow dark:bg-gray-600 dark:text-gray-100' : 'bg-transparent text-gray-700 dark:text-gray-300'}`}
+         > Grid </button>
+       </div>
      </div>
 
      {/* Dynamic View & Pagination */}
@@ -340,16 +345,16 @@ const handleConfirmDelete = () => {
        <NoResults />
      ) : (
        <>
-      <div className="md:hidden">
-          <ItemGridView items={paginatedItems} onDelete={handleOpenDeleteModal} onEdit={handleOpenEditModal} />
-        </div>
-        <div className="hidden md:block">
-          {view === 'list' ? (
-            <ItemListView items={paginatedItems} onDelete={handleOpenDeleteModal} onEdit={handleOpenEditModal} />
-          ) : (
-            <ItemGridView items={paginatedItems} onDelete={handleOpenDeleteModal} onEdit={handleOpenEditModal} />
-          )}
-      </div>
+         <div className="md:hidden">
+           <ItemGridView items={paginatedItems} onDelete={handleOpenDeleteModal} onEdit={handleOpenEditModal} />
+         </div>
+         <div className="hidden md:block">
+           {view === 'list' ? (
+             <ItemListView items={paginatedItems} onDelete={handleOpenDeleteModal} onEdit={handleOpenEditModal} />
+           ) : (
+             <ItemGridView items={paginatedItems} onDelete={handleOpenDeleteModal} onEdit={handleOpenEditModal} />
+           )}
+         </div>
 
          {/* Pagination */}
          <div className="flex flex-col md:flex-row justify-between items-center mt-6">
@@ -382,31 +387,36 @@ const handleConfirmDelete = () => {
        </>
      )}
 
-     {/* --- ADD THE MODAL RENDER --- */}
- <ConfirmationModal
-    isOpen={!!productToDelete}
-    onClose={handleCloseDeleteModal}
-    onConfirm={handleConfirmDelete}
-    isConfirming={isDeleting}
-    title="Delete Product?"
-    message={
-      productToDelete && ( // Show product name in message
-        <>
-          Are you sure you want to delete 
-          <strong className="text-gray-900 dark:text-gray-100"> {productToDelete.name}</strong>?
-          <br />
-          This action cannot be undone.
-        </>
-      )
-    }
- />
+     {/* Modals */}
+     <ConfirmationModal
+        isOpen={!!productToDelete}
+        onClose={handleCloseDeleteModal}
+        onConfirm={handleConfirmDelete}
+        isConfirming={isDeleting}
+        title="Delete Product?"
+        message={
+          productToDelete && (
+            <>
+              Are you sure you want to delete
+              <strong className="text-gray-900 dark:text-gray-100"> {productToDelete.name}</strong>?
+              <br />
+              This action cannot be undone.
+            </>
+          )
+        }
+     />
 
-     {/* Modal */}
      <EditItemModal
        product={editingProduct}
        onClose={handleCloseEditModal}
-       onSave={handleSaveEdit}
+       onSaveSuccess={handleSaveEdit}
        categories={categories}
+     />
+
+     <AddProductModal
+        isOpen={isAddModalOpen}
+        onClose={() => setIsAddModalOpen(false)}
+        categories={categories}
      />
    </div>
  );
